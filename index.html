@@ -354,7 +354,7 @@
     let sfxEnabled = false; // OFF by default
     let audioCtx = null;
 
-    /* Lazy Audio Context Initialization to satisfy Browser Autoplay Policy */
+    /* Lazy Audio Context Initialization */
     function initAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -364,24 +364,59 @@
       }
     }
 
-    function playBeep(freq = 440, type = 'square', duration = 0.08) {
+    /* Multi-Tone 8-Bit SFX Engine */
+    function playSFX(type) {
       if (!sfxEnabled) return;
       initAudio();
       if (!audioCtx) return;
 
+      const now = audioCtx.currentTime;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq;
-      
-      // Audible volume gain level
-      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-      
+
       osc.connect(gain);
       gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
+
+      switch (type) {
+        case 'coin': // Favorite button chime (2-tone rising chime)
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(987.77, now); // B5
+          osc.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+          break;
+
+        case 'powerup': // Surprise Me / Turn SFX On (Pitch sweep)
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(200, now);
+          osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+          osc.start(now);
+          osc.stop(now + 0.18);
+          break;
+
+        case 'click': // Standard UI click / filter switch
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(600, now);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+          osc.start(now);
+          osc.stop(now + 0.04);
+          break;
+
+        case 'close': // Closing modal / back action (Falling pitch)
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(500, now);
+          osc.frequency.linearRampToValueAtTime(150, now + 0.08);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+          break;
+      }
     }
 
     async function initGallery() {
@@ -505,7 +540,7 @@
     /* Favorites System */
     function toggleFav(name, event) {
       event.stopPropagation();
-      playBeep(880, 'triangle', 0.1);
+      playSFX('coin');
       if (favorites.includes(name)) {
         favorites = favorites.filter(f => f !== name);
       } else {
@@ -523,7 +558,7 @@
 
     /* Category Filter Handler */
     function filterCategory(category, btn) {
-      playBeep(520, 'square', 0.04);
+      playSFX('click');
       currentCategory = category;
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -532,7 +567,7 @@
 
     /* Surprise Randomizer */
     function surpriseMe() {
-      playBeep(750, 'square', 0.12);
+      playSFX('powerup');
       if (allWallpapers.length === 0) return;
       const rand = allWallpapers[Math.floor(Math.random() * allWallpapers.length)];
       openModal(rand.url, rand.name);
@@ -540,7 +575,7 @@
 
     /* Direct Blob Download */
     async function downloadImage(url, filename) {
-      playBeep(600, 'square', 0.08);
+      playSFX('click');
       try {
         const res = await fetch(url);
         const blob = await res.blob();
@@ -562,7 +597,7 @@
 
     /* Modal & Hash Deep Linking */
     function openModal(url, title) {
-      playBeep(400, 'sine', 0.06);
+      playSFX('click');
       document.getElementById('modalImg').src = url;
       document.getElementById('modalTitle').innerText = title;
       
@@ -574,7 +609,7 @@
     }
 
     function closeModal() {
-      playBeep(300, 'sine', 0.05);
+      playSFX('close');
       document.getElementById('previewModal').classList.remove('active');
       history.replaceState(null, null, ' ');
     }
@@ -589,7 +624,7 @@
 
     /* Controls & Toggles */
     function toggleCRT() {
-      playBeep(350, 'square', 0.05);
+      playSFX('click');
       const overlay = document.getElementById('crtOverlay');
       const btn = document.getElementById('crtBtn');
       overlay.classList.toggle('disabled');
@@ -600,13 +635,13 @@
       sfxEnabled = !sfxEnabled;
       if (sfxEnabled) {
         initAudio();
-        playBeep(600, 'square', 0.08); // Confirmation sound when turned ON
+        playSFX('powerup');
       }
       document.getElementById('sfxBtn').innerText = sfxEnabled ? '[SFX: ON]' : '[SFX: OFF]';
     }
 
     function toggleDensity() {
-      playBeep(450, 'square', 0.05);
+      playSFX('click');
       const gallery = document.getElementById('gallery');
       const btn = document.getElementById('densityBtn');
       gallery.classList.toggle('compact');
@@ -614,13 +649,13 @@
     }
 
     function changeSort(val) {
-      playBeep(500, 'square', 0.05);
+      playSFX('click');
       currentSort = val;
       renderGallery();
     }
 
     function changeTheme(themeName) {
-      playBeep(650, 'square', 0.05);
+      playSFX('click');
       document.body.className = themeName;
     }
 
