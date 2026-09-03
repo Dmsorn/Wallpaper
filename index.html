@@ -604,7 +604,13 @@
       gallery.innerHTML = filtered.map(item => {
         const isFav = favorites.includes(item.name);
         const itemKey = item.name.replace(/[^a-zA-Z0-9]/g, '');
-        const badgeText = item.width && item.height ? `${item.width}x${item.height}` : 'IMG';
+        const badgeText = item.width && item.height ? `${item.width}x${item.height}` : 'SCAN...';
+        
+        // Fetch true original resolution in background if not already loaded
+        if (!item.width && !item.height) {
+          fetchOriginalDimensions(item, itemKey);
+        }
+
         return `
           <div class="card">
             <div class="card-header">
@@ -613,7 +619,7 @@
             </div>
             <div class="card-img-wrap" onclick="openModal('${item.url}', '${item.name}')">
               <span class="badge" id="badge-${itemKey}">${badgeText}</span>
-              <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy" onload="detectOrientation(this, '${item.name}')">
+              <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy">
             </div>
             <div class="card-footer">
               <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFav('${item.name}', event)">${isFav ? '♥' : '♡'}</button>
@@ -625,24 +631,19 @@
       }).join('');
     }
 
-    function detectOrientation(img, imageName) {
-      const itemKey = imageName.replace(/[^a-zA-Z0-9]/g, '');
-      const badge = document.getElementById(`badge-${itemKey}`);
-      const wallpaper = allWallpapers.find(w => w.name === imageName);
-
-      if (wallpaper) {
-        wallpaper.width = img.naturalWidth;
-        wallpaper.height = img.naturalHeight;
-        if (img.naturalWidth > img.naturalHeight) {
-          wallpaper.orientation = 'DESKTOP';
-        } else {
-          wallpaper.orientation = 'MOBILE';
+    function fetchOriginalDimensions(item, itemKey) {
+      const img = new Image();
+      img.src = item.url;
+      img.onload = () => {
+        item.width = img.naturalWidth;
+        item.height = img.naturalHeight;
+        item.orientation = img.naturalWidth >= img.naturalHeight ? 'DESKTOP' : 'MOBILE';
+        
+        const badge = document.getElementById(`badge-${itemKey}`);
+        if (badge) {
+          badge.innerText = `${item.width}x${item.height}`;
         }
-      }
-
-      if (badge) {
-        badge.innerText = `${img.naturalWidth}x${img.naturalHeight}`;
-      }
+      };
     }
 
     function toggleFav(name, event) {
