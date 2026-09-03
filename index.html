@@ -5,26 +5,63 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WALLPAPER_VAULT.EXE</title>
 
-  <!-- Retro Google Fonts -->
+  <!-- Retro Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 
   <style>
+    /* CSS Variables for Dynamic Themes */
+    :root {
+      --bg-color: #0d0221;
+      --main-color: #00ffcc;
+      --accent-color: #ff007f;
+      --card-bg: #190a38;
+      --card-footer: #120529;
+      --text-color: #00ffcc;
+    }
+
+    body.theme-matrix {
+      --bg-color: #050b05;
+      --main-color: #00ff66;
+      --accent-color: #00ff66;
+      --card-bg: #0a1a0a;
+      --card-footer: #020a02;
+      --text-color: #00ff66;
+    }
+
+    body.theme-amber {
+      --bg-color: #0f0a00;
+      --main-color: #ffb000;
+      --accent-color: #ff8800;
+      --card-bg: #1f1400;
+      --card-footer: #0a0600;
+      --text-color: #ffb000;
+    }
+
+    body.theme-gameboy {
+      --bg-color: #8b956d;
+      --main-color: #0f380f;
+      --accent-color: #306230;
+      --card-bg: #9bbc0f;
+      --card-footer: #8b956d;
+      --text-color: #0f380f;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
-      background-color: #0d0221;
-      color: #00ffcc;
+      background-color: var(--bg-color);
+      color: var(--text-color);
       font-family: 'VT323', monospace;
       padding: 1.5rem 1rem;
       font-size: 1.25rem;
       letter-spacing: 1px;
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
 
     /* CRT Scanline Overlay */
-    body::before {
-      content: " ";
+    .crt-overlay {
       display: block;
       position: fixed;
       top: 0; left: 0; bottom: 0; right: 0;
@@ -33,6 +70,7 @@
       z-index: 10;
       pointer-events: none;
     }
+    .crt-overlay.disabled { display: none; }
 
     .container { max-width: 1300px; margin: 0 auto; }
 
@@ -40,30 +78,58 @@
       font-family: 'Press Start 2P', cursive;
       font-size: 1.4rem;
       text-align: center;
-      color: #ff007f;
-      text-shadow: 3px 3px #00ffcc;
-      margin-bottom: 1.5rem;
+      color: var(--accent-color);
+      text-shadow: 3px 3px var(--main-color);
+      margin-bottom: 1rem;
       line-height: 1.5;
     }
 
-    /* Retro Filter Buttons */
+    /* Controls Toolbar */
+    .toolbar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .retro-select, .retro-btn {
+      font-family: 'Press Start 2P', cursive;
+      font-size: 0.6rem;
+      background: var(--card-bg);
+      color: var(--main-color);
+      border: 2px solid var(--main-color);
+      padding: 0.5rem 0.8rem;
+      cursor: pointer;
+      box-shadow: 3px 3px 0px var(--accent-color);
+      outline: none;
+    }
+
+    .retro-btn:hover, .retro-select:hover {
+      background: var(--accent-color);
+      color: #fff;
+      border-color: #fff;
+    }
+
+    /* Category Filter Buttons */
     .filters { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; margin-bottom: 2rem; }
     .filter-btn {
       font-family: 'Press Start 2P', cursive;
       font-size: 0.65rem;
-      background: #190a38;
-      color: #00ffcc;
-      border: 2px solid #00ffcc;
+      background: var(--card-bg);
+      color: var(--main-color);
+      border: 2px solid var(--main-color);
       padding: 0.6rem 1rem;
       cursor: pointer;
-      box-shadow: 3px 3px 0px #ff007f;
+      box-shadow: 3px 3px 0px var(--accent-color);
       transition: all 0.1s ease;
     }
     .filter-btn:hover, .filter-btn.active {
-      background: #ff007f;
+      background: var(--accent-color);
       color: #fff;
       border-color: #fff;
-      box-shadow: 3px 3px 0px #00ffcc;
+      box-shadow: 3px 3px 0px var(--main-color);
       transform: translate(-1px, -1px);
     }
 
@@ -76,15 +142,15 @@
 
     /* Retro Window Cards */
     .card {
-      background: #190a38;
-      border: 2px solid #ff007f;
-      box-shadow: 4px 4px 0px #00ffcc;
+      background: var(--card-bg);
+      border: 2px solid var(--accent-color);
+      box-shadow: 4px 4px 0px var(--main-color);
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .card-header {
-      background: #ff007f;
+      background: var(--accent-color);
       color: #ffffff;
       padding: 0.2rem 0.5rem;
       font-family: 'Press Start 2P', cursive;
@@ -96,7 +162,7 @@
     .card-img-wrap {
       cursor: pointer;
       overflow: hidden;
-      border-bottom: 2px solid #ff007f;
+      border-bottom: 2px solid var(--accent-color);
       height: 200px;
     }
     .card img {
@@ -113,28 +179,22 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: #120529;
+      background: var(--card-footer);
     }
     .card-footer span {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 150px;
-      color: #00ffcc;
+      color: var(--text-color);
     }
-    .card-footer a {
-      color: #ff007f;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    .card-footer a:hover { text-decoration: underline; color: #00ffcc; }
 
-    /* Modal / Fullscreen Preview */
+    /* Fullscreen Modal */
     .modal {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(13, 2, 33, 0.9);
+      background: rgba(0, 0, 0, 0.85);
       z-index: 100;
       justify-content: center;
       align-items: center;
@@ -142,28 +202,31 @@
     }
     .modal.active { display: flex; }
     .modal-content {
-      background: #190a38;
-      border: 3px solid #00ffcc;
-      box-shadow: 8px 8px 0px #ff007f;
+      background: var(--card-bg);
+      border: 3px solid var(--main-color);
+      box-shadow: 8px 8px 0px var(--accent-color);
       max-width: 90vw;
       max-height: 90vh;
       display: flex;
       flex-direction: column;
     }
     .modal-header {
-      background: #00ffcc;
-      color: #0d0221;
+      background: var(--main-color);
+      color: var(--bg-color);
       padding: 0.4rem 0.8rem;
       font-family: 'Press Start 2P', cursive;
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .modal-close {
+    .modal-actions { display: flex; gap: 1rem; align-items: center; }
+    .modal-btn {
       cursor: pointer;
       font-weight: bold;
-      color: #ff007f;
+      color: var(--accent-color);
+      font-family: 'Press Start 2P', cursive;
+      font-size: 0.6rem;
     }
     .modal-body img {
       max-width: 100%;
@@ -176,18 +239,35 @@
 </head>
 <body>
 
+  <div class="crt-overlay" id="crtOverlay"></div>
+
   <div class="container">
     <h1>> WALLPAPER_VAULT.EXE</h1>
+    
+    <!-- Retro Customization Toolbar -->
+    <div class="toolbar">
+      <button class="retro-btn" onclick="toggleCRT()" id="crtBtn">[CRT: ON]</button>
+      <select class="retro-select" onchange="changeTheme(this.value)">
+        <option value="theme-synthwave">THEME: SYNTHWAVE</option>
+        <option value="theme-matrix">THEME: MATRIX</option>
+        <option value="theme-amber">THEME: AMBER</option>
+        <option value="theme-gameboy">THEME: GAMEBOY</option>
+      </select>
+    </div>
+
     <div class="filters" id="filters"></div>
     <div class="gallery" id="gallery">LOADING_DATA...</div>
   </div>
 
-  <!-- Preview Modal -->
+  <!-- Fullscreen Modal Preview -->
   <div class="modal" id="previewModal" onclick="closeModal()">
     <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <span id="modalTitle">PREVIEW.BMP</span>
-        <span class="modal-close" onclick="closeModal()">[X]</span>
+        <div class="modal-actions">
+          <span class="modal-btn" id="modalDLBtn">[GET]</span>
+          <span class="modal-btn" onclick="closeModal()">[X]</span>
+        </div>
       </div>
       <div class="modal-body">
         <img id="modalImg" src="" alt="Wallpaper Preview">
@@ -239,7 +319,7 @@
         renderGallery('All');
 
       } catch (err) {
-        gallery.innerHTML = `<p style="color:#ff007f;">[ERROR]: ${err.message}. VERIFY PUBLIC REPO STATUS.</p>`;
+        gallery.innerHTML = `<p style="color:var(--accent-color); text-align:center; grid-column: 1/-1;">[ERROR]: ${err.message}. VERIFY PUBLIC STATUS.</p>`;
       }
     }
 
@@ -255,7 +335,7 @@
       const filtered = category === 'All' ? allWallpapers : allWallpapers.filter(w => w.category === category);
 
       if (filtered.length === 0) {
-        gallery.innerHTML = `<p>NO_FILES_FOUND.</p>`;
+        gallery.innerHTML = `<p style="text-align:center; grid-column: 1/-1;">NO_FILES_FOUND.</p>`;
         return;
       }
 
@@ -270,10 +350,32 @@
           </div>
           <div class="card-footer">
             <span>${item.name}</span>
-            <a href="${item.url}" target="_blank" download>GET</a>
+            <button class="retro-btn" onclick="downloadImage('${item.url}', '${item.name}')">GET</button>
           </div>
         </div>
       `).join('');
+    }
+
+    // Direct Blob-based Download (Prevents opening view tab)
+    async function downloadImage(url, filename) {
+      try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      } catch (e) {
+        // Fallback
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+      }
     }
 
     function filterCategory(category, btn) {
@@ -282,14 +384,32 @@
       renderGallery(category);
     }
 
+    /* Modal Handlers */
     function openModal(url, title) {
       document.getElementById('modalImg').src = url;
       document.getElementById('modalTitle').innerText = title;
+      
+      const dlBtn = document.getElementById('modalDLBtn');
+      dlBtn.onclick = () => downloadImage(url, title);
+      
       document.getElementById('previewModal').classList.add('active');
     }
 
     function closeModal() {
       document.getElementById('previewModal').classList.remove('active');
+    }
+
+    /* CRT Toggle Handler */
+    function toggleCRT() {
+      const overlay = document.getElementById('crtOverlay');
+      const btn = document.getElementById('crtBtn');
+      overlay.classList.toggle('disabled');
+      btn.innerText = overlay.classList.contains('disabled') ? '[CRT: OFF]' : '[CRT: ON]';
+    }
+
+    /* Theme Switcher Handler */
+    function changeTheme(themeName) {
+      document.body.className = themeName;
     }
 
     initGallery();
