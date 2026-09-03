@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WALLPAPER_VAULT.EXE</title>
 
-  <!-- Favicon Tab Icon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👾</text></svg>">
 
-  <!-- Retro Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -301,16 +299,14 @@
   <div class="container">
     <h1>> WALLPAPER_VAULT.EXE</h1>
 
-    <!-- Search Bar -->
     <div class="search-container">
       <input type="text" id="searchInput" class="retro-input" placeholder="> SEARCH_FILENAME..." oninput="handleSearch()">
     </div>
 
-    <!-- Retro Controls Toolbar -->
     <div class="toolbar">
       <button class="retro-btn" onclick="surpriseMe()">[SURPRISE_ME.EXE]</button>
       <button class="retro-btn" onclick="toggleCRT()" id="crtBtn">[CRT: ON]</button>
-      <button class="retro-btn" onclick="toggleSFX()" id="sfxBtn">[SFX: ON]</button>
+      <button class="retro-btn" onclick="toggleSFX()" id="sfxBtn">[SFX: OFF]</button>
       <button class="retro-btn" onclick="toggleDensity()" id="densityBtn">[VIEW: 2X]</button>
       
       <select class="retro-select" onchange="changeSort(this.value)">
@@ -331,7 +327,6 @@
     <div class="gallery" id="gallery">LOADING_DATA...</div>
   </div>
 
-  <!-- Fullscreen Modal Preview -->
   <div class="modal" id="previewModal" onclick="closeModal()">
     <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
@@ -356,19 +351,33 @@
     let searchQuery = '';
     let currentSort = 'az';
     let favorites = JSON.parse(localStorage.getItem('vault_favs') || '[]');
-    let sfxEnabled = true;
+    let sfxEnabled = false; // OFF by default
+    let audioCtx = null;
 
-    /* Web Audio API Synthesizer */
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    function playBeep(freq = 440, type = 'square', duration = 0.05) {
+    /* Lazy Audio Context Initialization to satisfy Browser Autoplay Policy */
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playBeep(freq = 440, type = 'square', duration = 0.08) {
       if (!sfxEnabled) return;
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      initAudio();
+      if (!audioCtx) return;
+
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.type = type;
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      
+      // Audible volume gain level
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.start();
@@ -589,6 +598,10 @@
 
     function toggleSFX() {
       sfxEnabled = !sfxEnabled;
+      if (sfxEnabled) {
+        initAudio();
+        playBeep(600, 'square', 0.08); // Confirmation sound when turned ON
+      }
       document.getElementById('sfxBtn').innerText = sfxEnabled ? '[SFX: ON]' : '[SFX: OFF]';
     }
 
