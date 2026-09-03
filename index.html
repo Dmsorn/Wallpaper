@@ -332,6 +332,7 @@
       <div class="modal-header">
         <span id="modalTitle">PREVIEW.BMP</span>
         <div class="modal-actions">
+          <span class="modal-btn" onclick="copyShareLink()" id="shareBtn">[SHARE]</span>
           <span class="modal-btn" id="modalDLBtn">[GET]</span>
           <span class="modal-btn" onclick="closeModal()">[X]</span>
         </div>
@@ -712,7 +713,22 @@
       settings.theme = themeName;
       saveSettings();
     }
-
+    
+    function copyShareLink() {
+      playSFX('click');
+      const shareUrl = window.location.href;
+  
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        const btn = document.getElementById('shareBtn');
+        btn.innerText = '[COPIED!]';
+        setTimeout(() => {
+          btn.innerText = '[SHARE]';
+        }, 1500);
+      }).catch(err => {
+        console.error('CLIPBOARD_ERROR: ', err);
+      });
+    }
+    
     initSettings();
     initGallery();
   </script>
