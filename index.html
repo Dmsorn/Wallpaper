@@ -1,1 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wallpaper Gallery</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem 1rem; }
+    h1 { text-align: center; margin-bottom: 1.5rem; font-size: 2rem; font-weight: 700; }
+    
+    .filters { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-bottom: 2rem; }
+    .filter-btn {
+      background: #1e293b; color: #94a3b8; border: 1px solid #334155;
+      padding: 0.5rem 1rem; border-radius: 9999px; cursor: pointer;
+      font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease;
+    }
+    .filter-btn:hover, .filter-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
 
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.5rem; max-width: 1400px; margin: 0 auto;
+    }
+    .card {
+      background: #1e293b; border-radius: 12px; overflow: hidden;
+      border: 1px solid #334155; transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
+    .card img { width: 100%; height: 260px; object-fit: cover; display: block; background: #0f172a; }
+    .card-info { padding: 0.75rem; display: flex; justify-content: space-between; align-items: center; background: #1e293b; }
+    .card-info span { font-size: 0.75rem; color: #94a3b8; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-info a { color: #38bdf8; text-decoration: none; font-size: 0.875rem; font-weight: 600; }
+    .card-info a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <h1>My Wallpaper Collection</h1>
+  <div class="filters" id="filters"></div>
+  <div class="gallery" id="gallery">Loading wallpapers...</div>
+
+  <script>
+    const USERNAME = 'Dmsorn';
+    const REPO = 'Wallpaper'; // Replace with your exact GitHub repository name
+    const BRANCH = 'main';         // Change to 'master' if your repo uses master
+
+    let allWallpapers = [];
+
+    async function initGallery() {
+      const gallery = document.getElementById('gallery');
+
+      try {
+        // Fetch all files recursively in 1 single request
+        const res = await fetch(`https://api.github.com/repos/${USERNAME}/${REPO}/git/trees/${BRANCH}?recursive=1`);
+        
+        if (!res.ok) throw new Error('Repository or branch not found');
+        const data = await res.json();
+
+        // Filter image files only
+        const imageFiles = data.tree.filter(item => 
+          item.type === 'blob' && item.path.match(/\.(jpg|jpeg|png|webp|gif)$/i)
+        );
+
+        const categories = new Set(['All']);
+
+        allWallpapers = imageFiles.map(file => {
+          const parts = file.path.split('/');
+          const category = parts.length > 1 ? parts[0] : 'General';
+          categories.add(category);
+
+          // Safely encode file paths with spaces or special characters
+          const safePath = file.path.split('/').map(encodeURIComponent).join('/');
+          const rawUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/${BRANCH}/${safePath}`;
+
+          return {
+            name: parts[parts.length - 1],
+            category: category,
+            url: rawUrl
+          };
+        });
+
+        renderFilters(Array.from(categories));
+        renderGallery('All');
+
+      } catch (err) {
+        gallery.innerHTML = `<p style="text-align:center; grid-column: 1/-1; color: #ef4444;">
+          Error loading repo. Check that <b>REPO</b> is exact and <b>BRANCH</b> is correctly set to 'main' or 'master'.
+        </p>`;
+      }
+    }
+
+    function renderFilters(categories) {
+      const filters = document.getElementById('filters');
+      filters.innerHTML = categories.map((cat, idx) => `
+        <button class="filter-btn ${idx === 0 ? 'active' : ''}" onclick="filterCategory('${cat}', this)">${cat}</button>
+      `).join('');
+    }
+
+    function renderGallery(category) {
+      const gallery = document.getElementById('gallery');
+      const filtered = category === 'All' ? allWallpapers : allWallpapers.filter(w => w.category === category);
+
+      if (filtered.length === 0) {
+        gallery.innerHTML = `<p style="text-align:center; grid-column: 1/-1;">No wallpapers found in this folder.</p>`;
+        return;
+      }
+
+      gallery.innerHTML = filtered.map(item => `
+        <div class="card">
+          <a href="${item.url}" target="_blank">
+            <img src="${item.url}" alt="${item.name}" loading="lazy">
+          </a>
+          <div class="card-info">
+            <span>${item.name}</span>
+            <a href="${item.url}" target="_blank" download>View Full</a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterCategory(category, btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderGallery(category);
+    }
+
+    initGallery();
+  </script>
+</body>
+</html>
