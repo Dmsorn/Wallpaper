@@ -205,7 +205,7 @@
     }
     .card:hover img { transform: scale(1.05); }
 
-    /* Aspect Ratio Badges */
+    /* Resolution Metadata Badges */
     .badge {
       position: absolute;
       top: 6px;
@@ -214,8 +214,8 @@
       color: var(--main-color);
       border: 1px solid var(--main-color);
       font-family: 'Press Start 2P', cursive;
-      font-size: 0.45rem;
-      padding: 2px 4px;
+      font-size: 0.4rem;
+      padding: 3px 5px;
       z-index: 2;
     }
 
@@ -290,6 +290,43 @@
       display: block;
       margin: 0 auto;
     }
+
+    /* Screensaver / Slideshow Mode */
+    .screensaver {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: #000;
+      z-index: 200;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      cursor: none;
+    }
+    .screensaver.active { display: flex; }
+    .screensaver img {
+      max-width: 100%;
+      max-height: 90vh;
+      object-fit: contain;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    .screensaver-info {
+      position: absolute;
+      bottom: 25px;
+      font-family: 'Press Start 2P', cursive;
+      font-size: 0.5rem;
+      color: var(--main-color);
+      background: var(--card-bg);
+      padding: 8px 14px;
+      border: 2px solid var(--accent-color);
+      box-shadow: 4px 4px 0px var(--main-color);
+      opacity: 0.85;
+      text-align: center;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -305,6 +342,7 @@
 
     <div class="toolbar">
       <button class="retro-btn" onclick="surpriseMe()">[SURPRISE_ME.EXE]</button>
+      <button class="retro-btn" onclick="toggleScreensaver()">[SCREENSAVER.EXE]</button>
       <button class="retro-btn" onclick="toggleCRT()" id="crtBtn">[CRT: ON]</button>
       <button class="retro-btn" onclick="toggleSFX()" id="sfxBtn">[SFX: OFF]</button>
       <button class="retro-btn" onclick="toggleDensity()" id="densityBtn">[VIEW: 2X]</button>
@@ -343,6 +381,14 @@
     </div>
   </div>
 
+  <div class="screensaver" id="screensaverOverlay" onclick="toggleScreensaver()">
+    <img id="screensaverImg" src="" alt="Screensaver Wallpaper">
+    <div class="screensaver-info">
+      <div id="screensaverTitle">TITLE.BMP</div>
+      <div style="font-size: 0.4rem; opacity: 0.6; margin-top: 4px;">[CLICK OR PRESS ANY KEY TO EXIT]</div>
+    </div>
+  </div>
+
   <script>
     const USERNAME = 'Dmsorn';
     const REPO = 'Wallpaper';
@@ -362,6 +408,8 @@
 
     let sfxEnabled = settings.sfx;
     let audioCtx = null;
+    let screensaverActive = false;
+    let screensaverTimer = null;
 
     function initSettings() {
       document.body.className = settings.theme;
@@ -492,7 +540,9 @@
           return {
             name: filename,
             category: category,
-            orientation: 'DESKTOP', // default until measured
+            orientation: 'DESKTOP',
+            width: 0,
+            height: 0,
             url: fullUrl,
             thumbUrl: thumbUrl
           };
@@ -554,6 +604,7 @@
       gallery.innerHTML = filtered.map(item => {
         const isFav = favorites.includes(item.name);
         const itemKey = item.name.replace(/[^a-zA-Z0-9]/g, '');
+        const badgeText = item.width && item.height ? `${item.width}x${item.height}` : 'IMG';
         return `
           <div class="card">
             <div class="card-header">
@@ -561,7 +612,7 @@
               <span>OK</span>
             </div>
             <div class="card-img-wrap" onclick="openModal('${item.url}', '${item.name}')">
-              <span class="badge" id="badge-${itemKey}">IMG</span>
+              <span class="badge" id="badge-${itemKey}">${badgeText}</span>
               <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy" onload="detectOrientation(this, '${item.name}')">
             </div>
             <div class="card-footer">
@@ -579,12 +630,18 @@
       const badge = document.getElementById(`badge-${itemKey}`);
       const wallpaper = allWallpapers.find(w => w.name === imageName);
 
-      if (img.naturalWidth > img.naturalHeight) {
-        if (wallpaper) wallpaper.orientation = 'DESKTOP';
-        if (badge) badge.innerText = 'DESKTOP';
-      } else {
-        if (wallpaper) wallpaper.orientation = 'MOBILE';
-        if (badge) badge.innerText = 'MOBILE';
+      if (wallpaper) {
+        wallpaper.width = img.naturalWidth;
+        wallpaper.height = img.naturalHeight;
+        if (img.naturalWidth > img.naturalHeight) {
+          wallpaper.orientation = 'DESKTOP';
+        } else {
+          wallpaper.orientation = 'MOBILE';
+        }
+      }
+
+      if (badge) {
+        badge.innerText = `${img.naturalWidth}x${img.naturalHeight}`;
       }
     }
 
@@ -618,6 +675,37 @@
       if (allWallpapers.length === 0) return;
       const rand = allWallpapers[Math.floor(Math.random() * allWallpapers.length)];
       openModal(rand.url, rand.name);
+    }
+
+    function toggleScreensaver() {
+      playSFX('powerup');
+      const ss = document.getElementById('screensaverOverlay');
+      screensaverActive = !screensaverActive;
+
+      if (screensaverActive) {
+        ss.classList.add('active');
+        showNextScreensaverImage();
+        screensaverTimer = setInterval(showNextScreensaverImage, 4500);
+        window.addEventListener('keydown', handleScreensaverKey);
+      } else {
+        ss.classList.remove('active');
+        clearInterval(screensaverTimer);
+        window.removeEventListener('keydown', handleScreensaverKey);
+      }
+    }
+
+    function showNextScreensaverImage() {
+      if (allWallpapers.length === 0) return;
+      const rand = allWallpapers[Math.floor(Math.random() * allWallpapers.length)];
+      document.getElementById('screensaverImg').src = rand.url;
+      const dims = rand.width && rand.height ? ` [${rand.width}x${rand.height}]` : '';
+      document.getElementById('screensaverTitle').innerText = `${rand.name}${dims}`;
+    }
+
+    function handleScreensaverKey(e) {
+      if (screensaverActive) {
+        toggleScreensaver();
+      }
     }
 
     async function downloadImage(url, filename) {
