@@ -352,7 +352,6 @@
     let currentSort = 'az';
     let favorites = JSON.parse(localStorage.getItem('vault_favs') || '[]');
 
-    // Global Settings State (Persisted in localStorage)
     let settings = JSON.parse(localStorage.getItem('vault_settings')) || {
       theme: 'theme-synthwave',
       crt: true,
@@ -363,14 +362,11 @@
     let sfxEnabled = settings.sfx;
     let audioCtx = null;
 
-    /* Initialize Saved Settings across page reloads */
     function initSettings() {
-      // 1. Restore Theme
       document.body.className = settings.theme;
       const themeSelect = document.getElementById('themeSelect');
       if (themeSelect) themeSelect.value = settings.theme;
 
-      // 2. Restore CRT Overlay
       const crtOverlay = document.getElementById('crtOverlay');
       const crtBtn = document.getElementById('crtBtn');
       if (!settings.crt) {
@@ -381,12 +377,10 @@
         if (crtBtn) crtBtn.innerText = '[CRT: ON]';
       }
 
-      // 3. Restore SFX State
       sfxEnabled = settings.sfx;
       const sfxBtn = document.getElementById('sfxBtn');
       if (sfxBtn) sfxBtn.innerText = sfxEnabled ? '[SFX: ON]' : '[SFX: OFF]';
 
-      // 4. Restore Grid Density
       const gallery = document.getElementById('gallery');
       const densityBtn = document.getElementById('densityBtn');
       if (settings.density === 'compact') {
@@ -402,7 +396,6 @@
       localStorage.setItem('vault_settings', JSON.stringify(settings));
     }
 
-    /* Lazy Audio Context Initialization */
     function initAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -412,7 +405,6 @@
       }
     }
 
-    /* Multi-Tone 8-Bit SFX Engine */
     function playSFX(type) {
       if (!sfxEnabled) return;
       initAudio();
@@ -426,17 +418,16 @@
       gain.connect(audioCtx.destination);
 
       switch (type) {
-        case 'coin': // Favorite button chime (2-tone rising chime)
+        case 'coin':
           osc.type = 'square';
-          osc.frequency.setValueAtTime(987.77, now); // B5
-          osc.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+          osc.frequency.setValueAtTime(987.77, now);
+          osc.frequency.setValueAtTime(1318.51, now + 0.08);
           gain.gain.setValueAtTime(0.1, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
           osc.start(now);
           osc.stop(now + 0.25);
           break;
-
-        case 'powerup': // Surprise Me / Turn SFX On (Pitch sweep)
+        case 'powerup':
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(200, now);
           osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
@@ -445,8 +436,7 @@
           osc.start(now);
           osc.stop(now + 0.18);
           break;
-
-        case 'click': // Standard UI click / filter switch
+        case 'click':
           osc.type = 'square';
           osc.frequency.setValueAtTime(600, now);
           gain.gain.setValueAtTime(0.08, now);
@@ -454,8 +444,7 @@
           osc.start(now);
           osc.stop(now + 0.04);
           break;
-
-        case 'close': // Closing modal / back action (Falling pitch)
+        case 'close':
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(500, now);
           osc.frequency.linearRampToValueAtTime(150, now + 0.08);
@@ -484,14 +473,16 @@
           item.type === 'blob' && item.path.match(/\.(jpg|jpeg|png|webp|gif)$/i)
         );
 
-        const categories = new Set(['All', 'FAVORITES']);
+        const categories = new Set(['All', 'FAVORITES', 'DESKTOP', 'MOBILE']);
 
         allWallpapers = imageFiles.map(file => {
           const parts = file.path.split('/');
           const filename = parts.pop();
           const category = parts.length > 0 ? parts[0] : 'Root';
           
-          categories.add(category);
+          if (category !== 'Root') {
+            categories.add(category);
+          }
 
           const safePath = file.path.split('/').map(encodeURIComponent).join('/');
           const fullUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/${BRANCH}/${safePath}`;
@@ -500,6 +491,7 @@
           return {
             name: filename,
             category: category,
+            orientation: 'DESKTOP', // default until measured
             url: fullUrl,
             thumbUrl: thumbUrl
           };
@@ -507,8 +499,6 @@
 
         renderFilters(Array.from(categories));
         renderGallery();
-
-        // Check URL Hash Direct Links
         checkHashLink();
 
       } catch (err) {
@@ -528,11 +518,14 @@
 
       if (currentCategory === 'FAVORITES') {
         list = list.filter(w => favorites.includes(w.name));
+      } else if (currentCategory === 'DESKTOP') {
+        list = list.filter(w => w.orientation === 'DESKTOP');
+      } else if (currentCategory === 'MOBILE') {
+        list = list.filter(w => w.orientation === 'MOBILE');
       } else if (currentCategory !== 'All') {
         list = list.filter(w => w.category === currentCategory);
       }
 
-      // Enhanced Search: Checks Filename AND Category/Folder
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         list = list.filter(w => 
@@ -559,6 +552,7 @@
 
       gallery.innerHTML = filtered.map(item => {
         const isFav = favorites.includes(item.name);
+        const itemKey = item.name.replace(/[^a-zA-Z0-9]/g, '');
         return `
           <div class="card">
             <div class="card-header">
@@ -566,8 +560,8 @@
               <span>OK</span>
             </div>
             <div class="card-img-wrap" onclick="openModal('${item.url}', '${item.name}')">
-              <span class="badge" id="badge-${item.name.replace(/[^a-zA-Z0-9]/g, '')}">IMG</span>
-              <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy" onload="detectOrientation(this, 'badge-${item.name.replace(/[^a-zA-Z0-9]/g, '')}')">
+              <span class="badge" id="badge-${itemKey}">IMG</span>
+              <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy" onload="detectOrientation(this, '${item.name}')">
             </div>
             <div class="card-footer">
               <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFav('${item.name}', event)">${isFav ? '♥' : '♡'}</button>
@@ -579,18 +573,20 @@
       }).join('');
     }
 
-    /* Orientation Badge Detector */
-    function detectOrientation(img, badgeId) {
-      const badge = document.getElementById(badgeId);
-      if (!badge) return;
+    function detectOrientation(img, imageName) {
+      const itemKey = imageName.replace(/[^a-zA-Z0-9]/g, '');
+      const badge = document.getElementById(`badge-${itemKey}`);
+      const wallpaper = allWallpapers.find(w => w.name === imageName);
+
       if (img.naturalWidth > img.naturalHeight) {
-        badge.innerText = 'DESKTOP';
+        if (wallpaper) wallpaper.orientation = 'DESKTOP';
+        if (badge) badge.innerText = 'DESKTOP';
       } else {
-        badge.innerText = 'MOBILE';
+        if (wallpaper) wallpaper.orientation = 'MOBILE';
+        if (badge) badge.innerText = 'MOBILE';
       }
     }
 
-    /* Favorites System */
     function toggleFav(name, event) {
       event.stopPropagation();
       playSFX('coin');
@@ -603,13 +599,11 @@
       renderGallery();
     }
 
-    /* Search Input Handler */
     function handleSearch() {
       searchQuery = document.getElementById('searchInput').value;
       renderGallery();
     }
 
-    /* Category Filter Handler */
     function filterCategory(category, btn) {
       playSFX('click');
       currentCategory = category;
@@ -618,7 +612,6 @@
       renderGallery();
     }
 
-    /* Surprise Randomizer */
     function surpriseMe() {
       playSFX('powerup');
       if (allWallpapers.length === 0) return;
@@ -626,7 +619,6 @@
       openModal(rand.url, rand.name);
     }
 
-    /* Direct Blob Download */
     async function downloadImage(url, filename) {
       playSFX('click');
       try {
@@ -648,7 +640,6 @@
       }
     }
 
-    /* Modal & Hash Deep Linking */
     function openModal(url, title) {
       playSFX('click');
       document.getElementById('modalImg').src = url;
@@ -675,7 +666,6 @@
       }
     }
 
-    /* Controls & State-Saving Toggles */
     function toggleCRT() {
       playSFX('click');
       const overlay = document.getElementById('crtOverlay');
@@ -723,7 +713,6 @@
       saveSettings();
     }
 
-    // Initialize state and load gallery on page boot
     initSettings();
     initGallery();
   </script>
