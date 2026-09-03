@@ -300,7 +300,7 @@
     <h1>> WALLPAPER_VAULT.EXE</h1>
 
     <div class="search-container">
-      <input type="text" id="searchInput" class="retro-input" placeholder="> SEARCH_FILENAME..." oninput="handleSearch()">
+      <input type="text" id="searchInput" class="retro-input" placeholder="> SEARCH_FILE_OR_FOLDER..." oninput="handleSearch()">
     </div>
 
     <div class="toolbar">
@@ -315,7 +315,7 @@
         <option value="random">SORT: RANDOM</option>
       </select>
 
-      <select class="retro-select" onchange="changeTheme(this.value)">
+      <select class="retro-select" id="themeSelect" onchange="changeTheme(this.value)">
         <option value="theme-synthwave">THEME: SYNTHWAVE</option>
         <option value="theme-matrix">THEME: MATRIX</option>
         <option value="theme-amber">THEME: AMBER</option>
@@ -351,8 +351,56 @@
     let searchQuery = '';
     let currentSort = 'az';
     let favorites = JSON.parse(localStorage.getItem('vault_favs') || '[]');
-    let sfxEnabled = false; // OFF by default
+
+    // Global Settings State (Persisted in localStorage)
+    let settings = JSON.parse(localStorage.getItem('vault_settings')) || {
+      theme: 'theme-synthwave',
+      crt: true,
+      sfx: false,
+      density: 'normal'
+    };
+
+    let sfxEnabled = settings.sfx;
     let audioCtx = null;
+
+    /* Initialize Saved Settings across page reloads */
+    function initSettings() {
+      // 1. Restore Theme
+      document.body.className = settings.theme;
+      const themeSelect = document.getElementById('themeSelect');
+      if (themeSelect) themeSelect.value = settings.theme;
+
+      // 2. Restore CRT Overlay
+      const crtOverlay = document.getElementById('crtOverlay');
+      const crtBtn = document.getElementById('crtBtn');
+      if (!settings.crt) {
+        crtOverlay.classList.add('disabled');
+        if (crtBtn) crtBtn.innerText = '[CRT: OFF]';
+      } else {
+        crtOverlay.classList.remove('disabled');
+        if (crtBtn) crtBtn.innerText = '[CRT: ON]';
+      }
+
+      // 3. Restore SFX State
+      sfxEnabled = settings.sfx;
+      const sfxBtn = document.getElementById('sfxBtn');
+      if (sfxBtn) sfxBtn.innerText = sfxEnabled ? '[SFX: ON]' : '[SFX: OFF]';
+
+      // 4. Restore Grid Density
+      const gallery = document.getElementById('gallery');
+      const densityBtn = document.getElementById('densityBtn');
+      if (settings.density === 'compact') {
+        gallery.classList.add('compact');
+        if (densityBtn) densityBtn.innerText = '[VIEW: 4X]';
+      } else {
+        gallery.classList.remove('compact');
+        if (densityBtn) densityBtn.innerText = '[VIEW: 2X]';
+      }
+    }
+
+    function saveSettings() {
+      localStorage.setItem('vault_settings', JSON.stringify(settings));
+    }
 
     /* Lazy Audio Context Initialization */
     function initAudio() {
@@ -484,8 +532,13 @@
         list = list.filter(w => w.category === currentCategory);
       }
 
+      // Enhanced Search: Checks Filename AND Category/Folder
       if (searchQuery.trim() !== '') {
-        list = list.filter(w => w.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        const query = searchQuery.toLowerCase();
+        list = list.filter(w => 
+          w.name.toLowerCase().includes(query) || 
+          w.category.toLowerCase().includes(query)
+        );
       }
 
       if (currentSort === 'az') list.sort((a, b) => a.name.localeCompare(b.name));
@@ -622,22 +675,27 @@
       }
     }
 
-    /* Controls & Toggles */
+    /* Controls & State-Saving Toggles */
     function toggleCRT() {
       playSFX('click');
       const overlay = document.getElementById('crtOverlay');
       const btn = document.getElementById('crtBtn');
       overlay.classList.toggle('disabled');
-      btn.innerText = overlay.classList.contains('disabled') ? '[CRT: OFF]' : '[CRT: ON]';
+      
+      settings.crt = !overlay.classList.contains('disabled');
+      btn.innerText = settings.crt ? '[CRT: ON]' : '[CRT: OFF]';
+      saveSettings();
     }
 
     function toggleSFX() {
       sfxEnabled = !sfxEnabled;
+      settings.sfx = sfxEnabled;
       if (sfxEnabled) {
         initAudio();
         playSFX('powerup');
       }
       document.getElementById('sfxBtn').innerText = sfxEnabled ? '[SFX: ON]' : '[SFX: OFF]';
+      saveSettings();
     }
 
     function toggleDensity() {
@@ -645,7 +703,11 @@
       const gallery = document.getElementById('gallery');
       const btn = document.getElementById('densityBtn');
       gallery.classList.toggle('compact');
-      btn.innerText = gallery.classList.contains('compact') ? '[VIEW: 4X]' : '[VIEW: 2X]';
+      
+      const isCompact = gallery.classList.contains('compact');
+      settings.density = isCompact ? 'compact' : 'normal';
+      btn.innerText = isCompact ? '[VIEW: 4X]' : '[VIEW: 2X]';
+      saveSettings();
     }
 
     function changeSort(val) {
@@ -657,8 +719,12 @@
     function changeTheme(themeName) {
       playSFX('click');
       document.body.className = themeName;
+      settings.theme = themeName;
+      saveSettings();
     }
 
+    // Initialize state and load gallery on page boot
+    initSettings();
     initGallery();
   </script>
 </body>
