@@ -284,9 +284,7 @@
 
     .modal-header {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       z-index: 10;
       background: rgba(0, 0, 0, 0.85);
       backdrop-filter: blur(4px);
@@ -341,7 +339,7 @@
       display: block;
     }
 
-    /* Screensaver Mode */
+    /* Enhanced Screensaver Mode */
     .screensaver {
       display: none;
       position: fixed;
@@ -350,53 +348,80 @@
       z-index: 200;
       justify-content: center;
       align-items: center;
-      cursor: none;
+      cursor: default;
     }
     .screensaver.active { display: flex; }
 
     .screensaver-wrapper {
       position: relative;
-      display: inline-block;
-      max-width: 90vw;
-      max-height: 90vh;
-      line-height: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
     }
 
     .screensaver-wrapper img {
-      max-width: 90vw;
-      max-height: 90vh;
+      max-width: 92vw;
+      max-height: 92vh;
       width: auto;
       height: auto;
       object-fit: contain;
       display: block;
-      animation: fadeIn 0.5s ease-in-out;
+      animation: kenburns 16s ease-in-out infinite alternate, fadeIn 0.4s ease-in-out;
     }
 
     .screensaver-info {
       position: absolute;
-      bottom: 20px;
+      bottom: 25px;
       left: 50%;
       transform: translateX(-50%);
       font-family: 'Press Start 2P', cursive;
       font-size: 0.5rem;
       color: var(--main-color);
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.88);
       backdrop-filter: blur(4px);
-      padding: 8px 14px;
+      padding: 10px 16px;
       border: 2px solid var(--accent-color);
       box-shadow: 4px 4px 0px var(--main-color);
       text-align: center;
       white-space: nowrap;
-      z-index: 10;
-      line-height: normal;
-      max-width: 80%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      z-index: 210;
+      line-height: 1.4;
+      max-width: 85%;
+    }
+
+    .screensaver-hud-btns {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    .ss-hud-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--main-color);
+      color: var(--main-color);
+      font-family: 'Press Start 2P', cursive;
+      font-size: 0.45rem;
+      padding: 3px 6px;
+      cursor: pointer;
+    }
+    .ss-hud-btn:hover {
+      background: var(--accent-color);
+      color: #fff;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; }
+      from { opacity: 0.2; }
       to { opacity: 1; }
+    }
+
+    @keyframes kenburns {
+      0% { transform: scale(1) translate(0, 0); }
+      50% { transform: scale(1.06) translate(-0.8%, -0.8%); }
+      100% { transform: scale(1) translate(0, 0); }
     }
   </style>
 </head>
@@ -452,12 +477,18 @@
     </div>
   </div>
 
-  <div class="screensaver" id="screensaverOverlay" onclick="toggleScreensaver()">
+  <div class="screensaver" id="screensaverOverlay" onclick="handleSSClick(event)">
     <div class="screensaver-wrapper">
       <img id="screensaverImg" src="" alt="Screensaver Wallpaper">
-      <div class="screensaver-info">
+      <div class="screensaver-info" onclick="event.stopPropagation()">
         <div id="screensaverTitle">TITLE.BMP</div>
-        <div style="font-size: 0.4rem; opacity: 0.6; margin-top: 4px;">[CLICK OR PRESS ANY KEY TO EXIT]</div>
+        <div class="screensaver-hud-btns">
+          <button class="ss-hud-btn" onclick="navSS(-1)">[◄ PREV]</button>
+          <button class="ss-hud-btn" onclick="toggleSSPause()" id="ssPauseBtn">[PAUSE]</button>
+          <button class="ss-hud-btn" onclick="navSS(1)">[NEXT ►]</button>
+          <button class="ss-hud-btn" onclick="toggleScreensaver()">[EXIT]</button>
+        </div>
+        <div style="font-size: 0.38rem; opacity: 0.6; margin-top: 5px;">[KEYS: SPACE=PAUSE | ARROWS=NAV | ESC=EXIT]</div>
       </div>
     </div>
   </div>
@@ -476,13 +507,20 @@
       theme: 'theme-synthwave',
       crt: true,
       sfx: false,
-      density: 'normal'
+      density: 'normal',
+      ssSpeed: 6000
     };
 
     let sfxEnabled = settings.sfx;
     let audioCtx = null;
+
+    /* Screensaver Engine Variables */
     let screensaverActive = false;
+    let screensaverPaused = false;
     let screensaverTimer = null;
+    let ssQueue = [];
+    let ssIndex = 0;
+    let ssPreloadImg = new Image();
 
     /* Option 1: Smart Retro Name Generator */
     function generateSmartName(originalFilename) {
@@ -490,7 +528,6 @@
       const ext = parts.length > 1 ? parts.pop().toUpperCase() : 'PNG';
       const rawName = parts.join('.');
 
-      // If pure numbers, long random hex strings, or too long (> 12 chars)
       if (/^[0-9_-]+$/.test(rawName) || /^[a-f0-9]{10,}$/i.test(rawName) || rawName.length > 12) {
         let hash = 0;
         for (let i = 0; i < rawName.length; i++) {
@@ -501,7 +538,6 @@
         return `VAULT_${shortHex}.${ext}`;
       }
 
-      // Clean up punctuation and capitalize
       return rawName.replace(/[-_]/g, ' ').toUpperCase().slice(0, 12) + `.${ext}`;
     }
 
@@ -637,18 +673,38 @@
       }
     }
 
+    /* GitHub Tree API LocalStorage Cache Handler for Slow Networks */
+    async function fetchTreeData() {
+      const cacheKey = `vault_tree_${USERNAME}_${REPO}`;
+      const cacheTimeKey = `${cacheKey}_time`;
+      const cachedData = localStorage.getItem(cacheKey);
+      const cachedTime = localStorage.getItem(cacheTimeKey);
+
+      // Return cached tree if under 1 hour old
+      if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime) < 3600000)) {
+        return JSON.parse(cachedData);
+      }
+
+      const repoRes = await fetch(`https://api.github.com/repos/${USERNAME}/${REPO}`);
+      if (!repoRes.ok) throw new Error('REPO_NOT_FOUND');
+      const repoData = await repoRes.json();
+      const BRANCH = repoData.default_branch;
+
+      const res = await fetch(`https://api.github.com/repos/${USERNAME}/${REPO}/git/trees/${BRANCH}?recursive=1`);
+      if (!res.ok) throw new Error('TREE_FETCH_FAILED');
+      const treeData = await res.json();
+
+      localStorage.setItem(cacheKey, JSON.stringify(treeData));
+      localStorage.setItem(cacheTimeKey, Date.now().toString());
+
+      return treeData;
+    }
+
     async function initGallery() {
       const gallery = document.getElementById('gallery');
 
       try {
-        const repoRes = await fetch(`https://api.github.com/repos/${USERNAME}/${REPO}`);
-        if (!repoRes.ok) throw new Error('REPO_NOT_FOUND');
-        const repoData = await repoRes.json();
-        const BRANCH = repoData.default_branch;
-
-        const res = await fetch(`https://api.github.com/repos/${USERNAME}/${REPO}/git/trees/${BRANCH}?recursive=1`);
-        if (!res.ok) throw new Error('TREE_FETCH_FAILED');
-        const data = await res.json();
+        const data = await fetchTreeData();
 
         const imageFiles = data.tree.filter(item => 
           item.type === 'blob' && item.path.match(/\.(jpg|jpeg|png|webp|gif)$/i)
@@ -666,21 +722,25 @@
           }
 
           const safePath = file.path.split('/').map(encodeURIComponent).join('/');
-          const fullUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/${BRANCH}/${safePath}`;
+          const fullUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/main/${safePath}`;
+          
+          // Compressed thumbnails for fast gallery grids
           const thumbUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=320&output=webp&q=65`;
           
-          const smartName = generateSmartName(filename);
+          // Optimized screensaver URL (WebP conversion for slow connections)
+          const ssUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=1920&output=webp&q=80`;
 
           return {
             rawName: filename,
-            displayName: smartName,
+            displayName: generateSmartName(filename),
             category: category,
             orientation: 'DESKTOP',
             vibeTag: '#RETRO_VIBE',
             width: 0,
             height: 0,
             url: fullUrl,
-            thumbUrl: thumbUrl
+            thumbUrl: thumbUrl,
+            ssUrl: ssUrl
           };
         });
 
@@ -765,7 +825,7 @@
       }).join('');
     }
 
-    /* Fast aspect ratio & Color Vibe Detection */
+    /* Fast Aspect Ratio & Color Vibe Detection */
     function handleThumbLoad(img, itemKey, rawName) {
       const item = allWallpapers.find(w => w.rawName === rawName);
       if (!item) return;
@@ -819,6 +879,7 @@
       openModal(rand.url, rand.rawName);
     }
 
+    /* Enhanced Screensaver Engine */
     function toggleScreensaver() {
       playSFX('powerup');
       const ss = document.getElementById('screensaverOverlay');
@@ -826,26 +887,86 @@
 
       if (screensaverActive) {
         ss.classList.add('active');
-        showNextScreensaverImage();
-        screensaverTimer = setInterval(showNextScreensaverImage, 4500);
-        window.addEventListener('keydown', handleScreensaverKey);
+        screensaverPaused = false;
+        
+        // Scope screensaver queue to currently filtered gallery view
+        ssQueue = getFilteredList();
+        if (ssQueue.length === 0) ssQueue = [...allWallpapers];
+        ssQueue.sort(() => Math.random() - 0.5); // Shuffle rotation
+        
+        ssIndex = 0;
+        renderScreensaverSlide();
+        startSSInterval();
+
+        window.addEventListener('keydown', handleSSKeyboardControls);
       } else {
         ss.classList.remove('active');
         clearInterval(screensaverTimer);
-        window.removeEventListener('keydown', handleScreensaverKey);
+        window.removeEventListener('keydown', handleSSKeyboardControls);
       }
     }
 
-    function showNextScreensaverImage() {
-      if (allWallpapers.length === 0) return;
-      const rand = allWallpapers[Math.floor(Math.random() * allWallpapers.length)];
-      document.getElementById('screensaverImg').src = rand.url;
-      const dims = rand.width && rand.height ? ` [${rand.width}x${rand.height}]` : '';
-      document.getElementById('screensaverTitle').innerText = `${rand.displayName} ${rand.vibeTag}${dims}`;
+    function startSSInterval() {
+      clearInterval(screensaverTimer);
+      screensaverTimer = setInterval(() => {
+        if (!screensaverPaused) {
+          ssIndex = (ssIndex + 1) % ssQueue.length;
+          renderScreensaverSlide();
+        }
+      }, settings.ssSpeed || 6000);
     }
 
-    function handleScreensaverKey(e) {
-      if (screensaverActive) {
+    function renderScreensaverSlide() {
+      if (ssQueue.length === 0) return;
+      const current = ssQueue[ssIndex];
+      const nextItem = ssQueue[(ssIndex + 1) % ssQueue.length];
+
+      const ssImg = document.getElementById('screensaverImg');
+      
+      // Load optimized WebP CDN image instead of raw full GitHub file
+      ssImg.src = current.ssUrl;
+      
+      const dims = current.width && current.height ? ` [${current.width}x${current.height}]` : '';
+      const pauseState = screensaverPaused ? ' [PAUSED]' : '';
+      document.getElementById('screensaverTitle').innerText = `${current.displayName} ${current.vibeTag}${dims} (${ssIndex + 1}/${ssQueue.length})${pauseState}`;
+
+      // Preload next image into off-screen buffer to avoid delay
+      if (nextItem) {
+        ssPreloadImg.src = nextItem.ssUrl;
+      }
+    }
+
+    function toggleSSPause() {
+      screensaverPaused = !screensaverPaused;
+      playSFX('click');
+      document.getElementById('ssPauseBtn').innerText = screensaverPaused ? '[RESUME]' : '[PAUSE]';
+      renderScreensaverSlide();
+    }
+
+    function navSS(dir) {
+      playSFX('click');
+      ssIndex = (ssIndex + dir + ssQueue.length) % ssQueue.length;
+      renderScreensaverSlide();
+      startSSInterval();
+    }
+
+    function handleSSClick(e) {
+      if (e.target.id === 'screensaverOverlay' || e.target.classList.contains('screensaver-wrapper')) {
+        toggleScreensaver();
+      }
+    }
+
+    function handleSSKeyboardControls(e) {
+      if (!screensaverActive) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        toggleSSPause();
+      } else if (e.code === 'ArrowRight') {
+        navSS(1);
+      } else if (e.code === 'ArrowLeft') {
+        navSS(-1);
+      } else if (e.code === 'Escape') {
         toggleScreensaver();
       }
     }
