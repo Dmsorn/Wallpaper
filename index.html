@@ -205,7 +205,7 @@
     }
     .card:hover img { transform: scale(1.05); }
 
-    /* Resolution Metadata Badges */
+    /* Metadata Badges & Auto Vibe Badges */
     .badge {
       position: absolute;
       top: 6px;
@@ -216,6 +216,19 @@
       font-family: 'Press Start 2P', cursive;
       font-size: 0.4rem;
       padding: 3px 5px;
+      z-index: 2;
+    }
+
+    .vibe-badge {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      background: rgba(0, 0, 0, 0.8);
+      color: var(--accent-color);
+      border: 1px solid var(--accent-color);
+      font-family: 'Press Start 2P', cursive;
+      font-size: 0.38rem;
+      padding: 2px 4px;
       z-index: 2;
     }
 
@@ -230,7 +243,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 110px;
+      max-width: 120px;
       color: var(--text-color);
     }
 
@@ -244,7 +257,7 @@
     }
     .fav-btn.active { color: #ff0055; text-shadow: 0 0 5px #ff0055; }
 
-    /* Fullscreen Modal - Overflow Fix */
+    /* Fullscreen Modal */
     .modal {
       display: none;
       position: fixed;
@@ -269,7 +282,6 @@
       overflow: hidden;
     }
 
-    /* Fixed Modal Header Overflow */
     .modal-header {
       position: absolute;
       top: 0;
@@ -396,7 +408,7 @@
     <h1>> WALLPAPER_VAULT.EXE</h1>
 
     <div class="search-container">
-      <input type="text" id="searchInput" class="retro-input" placeholder="> SEARCH_FILE_OR_FOLDER..." oninput="handleSearch()">
+      <input type="text" id="searchInput" class="retro-input" placeholder="> SEARCH_FILE_OR_TAG..." oninput="handleSearch()">
     </div>
 
     <div class="toolbar">
@@ -471,6 +483,65 @@
     let audioCtx = null;
     let screensaverActive = false;
     let screensaverTimer = null;
+
+    /* Option 1: Smart Retro Name Generator */
+    function generateSmartName(originalFilename) {
+      const parts = originalFilename.split('.');
+      const ext = parts.length > 1 ? parts.pop().toUpperCase() : 'PNG';
+      const rawName = parts.join('.');
+
+      // If pure numbers, long random hex strings, or too long (> 12 chars)
+      if (/^[0-9_-]+$/.test(rawName) || /^[a-f0-9]{10,}$/i.test(rawName) || rawName.length > 12) {
+        let hash = 0;
+        for (let i = 0; i < rawName.length; i++) {
+          hash = ((hash << 5) - hash) + rawName.charCodeAt(i);
+          hash |= 0;
+        }
+        const shortHex = Math.abs(hash).toString(16).substring(0, 4).toUpperCase();
+        return `VAULT_${shortHex}.${ext}`;
+      }
+
+      // Clean up punctuation and capitalize
+      return rawName.replace(/[-_]/g, ' ').toUpperCase().slice(0, 12) + `.${ext}`;
+    }
+
+    /* Option 2: Canvas Color Vibe Tag Detector */
+    function detectColorVibe(imgElement) {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 10;
+        canvas.height = 10;
+
+        ctx.drawImage(imgElement, 0, 0, 10, 10);
+        const data = ctx.getImageData(0, 0, 10, 10).data;
+
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+        }
+        const count = data.length / 4;
+        r = Math.round(r / count);
+        g = Math.round(g / count);
+        b = Math.round(b / count);
+
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+        if (brightness < 45) return '#DARK_VOID';
+        if (brightness > 200) return '#LIGHT_CORE';
+        if (r > g + 30 && r > b + 30) return '#NEON_RED';
+        if (g > r + 30 && g > b + 30) return '#MATRIX_GREEN';
+        if (b > r + 30 && b > g + 30) return '#CYAN_NEON';
+        if (r > 130 && b > 130 && g < 100) return '#PURPLE_HAZE';
+        if (r > 150 && g > 110 && b < 90) return '#AMBER_GLOW';
+
+        return '#RETRO_VIBE';
+      } catch (e) {
+        return '#RETRO_VIBE';
+      }
+    }
 
     function initSettings() {
       document.body.className = settings.theme;
@@ -596,14 +667,16 @@
 
           const safePath = file.path.split('/').map(encodeURIComponent).join('/');
           const fullUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/${BRANCH}/${safePath}`;
-          
-          // Fast optimized WebP thumbnail URL
           const thumbUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=320&output=webp&q=65`;
+          
+          const smartName = generateSmartName(filename);
 
           return {
-            name: filename,
+            rawName: filename,
+            displayName: smartName,
             category: category,
             orientation: 'DESKTOP',
+            vibeTag: '#RETRO_VIBE',
             width: 0,
             height: 0,
             url: fullUrl,
@@ -631,7 +704,7 @@
       let list = [...allWallpapers];
 
       if (currentCategory === 'FAVORITES') {
-        list = list.filter(w => favorites.includes(w.name));
+        list = list.filter(w => favorites.includes(w.rawName));
       } else if (currentCategory === 'DESKTOP') {
         list = list.filter(w => w.orientation === 'DESKTOP');
       } else if (currentCategory === 'MOBILE') {
@@ -643,13 +716,15 @@
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         list = list.filter(w => 
-          w.name.toLowerCase().includes(query) || 
+          w.rawName.toLowerCase().includes(query) || 
+          w.displayName.toLowerCase().includes(query) || 
+          w.vibeTag.toLowerCase().includes(query) || 
           w.category.toLowerCase().includes(query)
         );
       }
 
-      if (currentSort === 'az') list.sort((a, b) => a.name.localeCompare(b.name));
-      if (currentSort === 'za') list.sort((a, b) => b.name.localeCompare(a.name));
+      if (currentSort === 'az') list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+      if (currentSort === 'za') list.sort((a, b) => b.displayName.localeCompare(a.displayName));
       if (currentSort === 'random') list.sort(() => Math.random() - 0.5);
 
       return list;
@@ -665,8 +740,8 @@
       }
 
       gallery.innerHTML = filtered.map(item => {
-        const isFav = favorites.includes(item.name);
-        const itemKey = item.name.replace(/[^a-zA-Z0-9]/g, '');
+        const isFav = favorites.includes(item.rawName);
+        const itemKey = item.rawName.replace(/[^a-zA-Z0-9]/g, '');
         const badgeText = item.width && item.height ? `${item.width}x${item.height}` : item.orientation;
 
         return `
@@ -675,41 +750,50 @@
               <span>SYS_IMG</span>
               <span>OK</span>
             </div>
-            <div class="card-img-wrap" onclick="openModal('${item.url}', '${item.name}')">
+            <div class="card-img-wrap" onclick="openModal('${item.url}', '${item.rawName}')">
               <span class="badge" id="badge-${itemKey}">${badgeText}</span>
-              <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy" onload="handleThumbLoad(this, '${itemKey}', '${item.name}')">
+              <span class="vibe-badge" id="vibe-${itemKey}">${item.vibeTag}</span>
+              <img src="${item.thumbUrl}" alt="${item.displayName}" loading="lazy" crossorigin="anonymous" onload="handleThumbLoad(this, '${itemKey}', '${item.rawName}')">
             </div>
             <div class="card-footer">
-              <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFav('${item.name}', event)">${isFav ? '♥' : '♡'}</button>
-              <span>${item.name}</span>
-              <button class="retro-btn" onclick="downloadImage('${item.url}', '${item.name}')">GET</button>
+              <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFav('${item.rawName}', event)">${isFav ? '♥' : '♡'}</button>
+              <span title="${item.rawName}">${item.displayName}</span>
+              <button class="retro-btn" onclick="downloadImage('${item.url}', '${item.rawName}')">GET</button>
             </div>
           </div>
         `;
       }).join('');
     }
 
-    /* Instant aspect/orientation scan from thumbnail onload without downloading multi-MB raw files */
-    function handleThumbLoad(img, itemKey, name) {
-      const item = allWallpapers.find(w => w.name === name);
+    /* Fast aspect ratio & Color Vibe Detection */
+    function handleThumbLoad(img, itemKey, rawName) {
+      const item = allWallpapers.find(w => w.rawName === rawName);
       if (!item) return;
 
       const isLandscape = img.naturalWidth >= img.naturalHeight;
       item.orientation = isLandscape ? 'DESKTOP' : 'MOBILE';
 
+      const detectedTag = detectColorVibe(img);
+      item.vibeTag = detectedTag;
+
       const badge = document.getElementById(`badge-${itemKey}`);
       if (badge && (!item.width || !item.height)) {
         badge.innerText = item.orientation;
       }
+
+      const vibeElem = document.getElementById(`vibe-${itemKey}`);
+      if (vibeElem) {
+        vibeElem.innerText = detectedTag;
+      }
     }
 
-    function toggleFav(name, event) {
+    function toggleFav(rawName, event) {
       event.stopPropagation();
       playSFX('coin');
-      if (favorites.includes(name)) {
-        favorites = favorites.filter(f => f !== name);
+      if (favorites.includes(rawName)) {
+        favorites = favorites.filter(f => f !== rawName);
       } else {
-        favorites.push(name);
+        favorites.push(rawName);
       }
       localStorage.setItem('vault_favs', JSON.stringify(favorites));
       renderGallery();
@@ -732,7 +816,7 @@
       playSFX('powerup');
       if (allWallpapers.length === 0) return;
       const rand = allWallpapers[Math.floor(Math.random() * allWallpapers.length)];
-      openModal(rand.url, rand.name);
+      openModal(rand.url, rand.rawName);
     }
 
     function toggleScreensaver() {
@@ -757,7 +841,7 @@
       const rand = allWallpapers[Math.floor(Math.random() * allWallpapers.length)];
       document.getElementById('screensaverImg').src = rand.url;
       const dims = rand.width && rand.height ? ` [${rand.width}x${rand.height}]` : '';
-      document.getElementById('screensaverTitle').innerText = `${rand.name}${dims}`;
+      document.getElementById('screensaverTitle').innerText = `${rand.displayName} ${rand.vibeTag}${dims}`;
     }
 
     function handleScreensaverKey(e) {
@@ -787,30 +871,32 @@
       }
     }
 
-    function openModal(url, title) {
+    function openModal(url, rawName) {
       playSFX('click');
+      const item = allWallpapers.find(w => w.rawName === rawName);
+      const displayName = item ? item.displayName : rawName;
+      const vibe = item ? item.vibeTag : '';
+
       const modalImg = document.getElementById('modalImg');
       modalImg.src = url;
-      document.getElementById('modalTitle').innerText = title;
+      document.getElementById('modalTitle').innerText = `${displayName} ${vibe}`;
       
-      // Load exact dimensions on-demand when previewing
       modalImg.onload = () => {
-        const item = allWallpapers.find(w => w.name === title);
         if (item) {
           item.width = modalImg.naturalWidth;
           item.height = modalImg.naturalHeight;
-          const itemKey = item.name.replace(/[^a-zA-Z0-9]/g, '');
+          const itemKey = item.rawName.replace(/[^a-zA-Z0-9]/g, '');
           const badge = document.getElementById(`badge-${itemKey}`);
           if (badge) badge.innerText = `${item.width}x${item.height}`;
-          document.getElementById('modalTitle').innerText = `${title} [${item.width}x${item.height}]`;
+          document.getElementById('modalTitle').innerText = `${displayName} [${item.width}x${item.height}] ${vibe}`;
         }
       };
 
       const dlBtn = document.getElementById('modalDLBtn');
-      dlBtn.onclick = () => downloadImage(url, title);
+      dlBtn.onclick = () => downloadImage(url, rawName);
       
       document.getElementById('previewModal').classList.add('active');
-      window.location.hash = `preview=${encodeURIComponent(title)}`;
+      window.location.hash = `preview=${encodeURIComponent(rawName)}`;
     }
 
     function closeModal() {
@@ -821,9 +907,9 @@
 
     function checkHashLink() {
       if (window.location.hash.startsWith('#preview=')) {
-        const title = decodeURIComponent(window.location.hash.replace('#preview=', ''));
-        const item = allWallpapers.find(w => w.name === title);
-        if (item) openModal(item.url, item.name);
+        const rawName = decodeURIComponent(window.location.hash.replace('#preview=', ''));
+        const item = allWallpapers.find(w => w.rawName === rawName);
+        if (item) openModal(item.url, item.rawName);
       }
     }
 
