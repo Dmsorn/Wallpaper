@@ -244,7 +244,7 @@
     }
     .fav-btn.active { color: #ff0055; text-shadow: 0 0 5px #ff0055; }
 
-    /* Fullscreen Modal - Perfect Overlay Alignment */
+    /* Fullscreen Modal - Overflow Fix */
     .modal {
       display: none;
       position: fixed;
@@ -266,29 +266,46 @@
       line-height: 0;
       max-width: 90vw;
       max-height: 90vh;
+      overflow: hidden;
     }
 
-    /* Pinned Overlay Header Bar directly on the top edge of the image */
+    /* Fixed Modal Header Overflow */
     .modal-header {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       z-index: 10;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.85);
       backdrop-filter: blur(4px);
       color: var(--main-color);
       border-bottom: 2px solid var(--main-color);
       padding: 0.5rem 0.8rem;
       font-family: 'Press Start 2P', cursive;
-      font-size: 0.6rem;
+      font-size: 0.55rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 0.5rem;
       line-height: normal;
+      overflow: hidden;
     }
 
-    .modal-actions { display: flex; gap: 0.8rem; align-items: center; }
+    #modalTitle {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
     .modal-btn {
       cursor: pointer;
       font-weight: bold;
@@ -312,7 +329,7 @@
       display: block;
     }
 
-    /* Screensaver / Slideshow Mode - Direct Image Overlay HUD */
+    /* Screensaver Mode */
     .screensaver {
       display: none;
       position: fixed;
@@ -360,6 +377,9 @@
       white-space: nowrap;
       z-index: 10;
       line-height: normal;
+      max-width: 80%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     @keyframes fadeIn {
@@ -576,7 +596,9 @@
 
           const safePath = file.path.split('/').map(encodeURIComponent).join('/');
           const fullUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/${BRANCH}/${safePath}`;
-          const thumbUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=400&output=webp&q=75`;
+          
+          // Fast optimized WebP thumbnail URL
+          const thumbUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=320&output=webp&q=65`;
 
           return {
             name: filename,
@@ -645,11 +667,7 @@
       gallery.innerHTML = filtered.map(item => {
         const isFav = favorites.includes(item.name);
         const itemKey = item.name.replace(/[^a-zA-Z0-9]/g, '');
-        const badgeText = item.width && item.height ? `${item.width}x${item.height}` : 'SCAN...';
-        
-        if (!item.width && !item.height) {
-          fetchOriginalDimensions(item, itemKey);
-        }
+        const badgeText = item.width && item.height ? `${item.width}x${item.height}` : item.orientation;
 
         return `
           <div class="card">
@@ -659,7 +677,7 @@
             </div>
             <div class="card-img-wrap" onclick="openModal('${item.url}', '${item.name}')">
               <span class="badge" id="badge-${itemKey}">${badgeText}</span>
-              <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy">
+              <img src="${item.thumbUrl}" alt="${item.name}" loading="lazy" onload="handleThumbLoad(this, '${itemKey}', '${item.name}')">
             </div>
             <div class="card-footer">
               <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFav('${item.name}', event)">${isFav ? '♥' : '♡'}</button>
@@ -671,19 +689,18 @@
       }).join('');
     }
 
-    function fetchOriginalDimensions(item, itemKey) {
-      const img = new Image();
-      img.src = item.url;
-      img.onload = () => {
-        item.width = img.naturalWidth;
-        item.height = img.naturalHeight;
-        item.orientation = img.naturalWidth >= img.naturalHeight ? 'DESKTOP' : 'MOBILE';
-        
-        const badge = document.getElementById(`badge-${itemKey}`);
-        if (badge) {
-          badge.innerText = `${item.width}x${item.height}`;
-        }
-      };
+    /* Instant aspect/orientation scan from thumbnail onload without downloading multi-MB raw files */
+    function handleThumbLoad(img, itemKey, name) {
+      const item = allWallpapers.find(w => w.name === name);
+      if (!item) return;
+
+      const isLandscape = img.naturalWidth >= img.naturalHeight;
+      item.orientation = isLandscape ? 'DESKTOP' : 'MOBILE';
+
+      const badge = document.getElementById(`badge-${itemKey}`);
+      if (badge && (!item.width || !item.height)) {
+        badge.innerText = item.orientation;
+      }
     }
 
     function toggleFav(name, event) {
@@ -772,9 +789,23 @@
 
     function openModal(url, title) {
       playSFX('click');
-      document.getElementById('modalImg').src = url;
+      const modalImg = document.getElementById('modalImg');
+      modalImg.src = url;
       document.getElementById('modalTitle').innerText = title;
       
+      // Load exact dimensions on-demand when previewing
+      modalImg.onload = () => {
+        const item = allWallpapers.find(w => w.name === title);
+        if (item) {
+          item.width = modalImg.naturalWidth;
+          item.height = modalImg.naturalHeight;
+          const itemKey = item.name.replace(/[^a-zA-Z0-9]/g, '');
+          const badge = document.getElementById(`badge-${itemKey}`);
+          if (badge) badge.innerText = `${item.width}x${item.height}`;
+          document.getElementById('modalTitle').innerText = `${title} [${item.width}x${item.height}]`;
+        }
+      };
+
       const dlBtn = document.getElementById('modalDLBtn');
       dlBtn.onclick = () => downloadImage(url, title);
       
