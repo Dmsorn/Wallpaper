@@ -369,7 +369,7 @@
       height: auto;
       object-fit: contain;
       display: block;
-      animation: kenburns 16s ease-in-out infinite alternate, fadeIn 0.4s ease-in-out;
+      animation: kenburns 16s ease-in-out infinite alternate, fadeIn 0.3s ease-in-out;
     }
 
     .screensaver-info {
@@ -477,6 +477,7 @@
     </div>
   </div>
 
+  <!-- Screensaver Slideshow Component -->
   <div class="screensaver" id="screensaverOverlay" onclick="handleSSClick(event)">
     <div class="screensaver-wrapper">
       <img id="screensaverImg" src="" alt="Screensaver Wallpaper">
@@ -514,15 +515,15 @@
     let sfxEnabled = settings.sfx;
     let audioCtx = null;
 
-    /* Screensaver Engine Variables */
+    /* Screensaver Engine Variables & Memory Cache Map */
     let screensaverActive = false;
     let screensaverPaused = false;
     let screensaverTimer = null;
     let ssQueue = [];
     let ssIndex = 0;
-    let ssPreloadImg = new Image();
+    const ssCache = new Map();
 
-    /* Option 1: Smart Retro Name Generator */
+    /* Smart Retro Name Generator */
     function generateSmartName(originalFilename) {
       const parts = originalFilename.split('.');
       const ext = parts.length > 1 ? parts.pop().toUpperCase() : 'PNG';
@@ -541,7 +542,7 @@
       return rawName.replace(/[-_]/g, ' ').toUpperCase().slice(0, 12) + `.${ext}`;
     }
 
-    /* Option 2: Canvas Color Vibe Tag Detector */
+    /* Canvas Color Vibe Tag Detector */
     function detectColorVibe(imgElement) {
       try {
         const canvas = document.createElement('canvas');
@@ -673,14 +674,13 @@
       }
     }
 
-    /* GitHub Tree API LocalStorage Cache Handler for Slow Networks */
+    /* GitHub Tree API LocalStorage Cache Handler */
     async function fetchTreeData() {
       const cacheKey = `vault_tree_${USERNAME}_${REPO}`;
       const cacheTimeKey = `${cacheKey}_time`;
       const cachedData = localStorage.getItem(cacheKey);
       const cachedTime = localStorage.getItem(cacheTimeKey);
 
-      // Return cached tree if under 1 hour old
       if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime) < 3600000)) {
         return JSON.parse(cachedData);
       }
@@ -724,11 +724,11 @@
           const safePath = file.path.split('/').map(encodeURIComponent).join('/');
           const fullUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/main/${safePath}`;
           
-          // Compressed thumbnails for fast gallery grids
+          // Fast WebP Thumbnails
           const thumbUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=320&output=webp&q=65`;
           
-          // Optimized screensaver URL (WebP conversion for slow connections)
-          const ssUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=1920&output=webp&q=80`;
+          // Optimized screensaver URL payload (1280px width, q=75 for instant loading)
+          const ssUrl = `https://wsrv.nl/?url=${encodeURIComponent(fullUrl)}&w=1280&output=webp&q=75`;
 
           return {
             rawName: filename,
@@ -825,7 +825,6 @@
       }).join('');
     }
 
-    /* Fast Aspect Ratio & Color Vibe Detection */
     function handleThumbLoad(img, itemKey, rawName) {
       const item = allWallpapers.find(w => w.rawName === rawName);
       if (!item) return;
@@ -879,7 +878,25 @@
       openModal(rand.url, rand.rawName);
     }
 
-    /* Enhanced Screensaver Engine */
+    /* Screensaver Multi-Slide Preloading Helpers */
+    function preloadSlide(item) {
+      if (!item || !item.ssUrl || ssCache.has(item.ssUrl)) return;
+      const img = new Image();
+      img.src = item.ssUrl;
+      ssCache.set(item.ssUrl, img);
+    }
+
+    function preloadNearbySlides() {
+      if (ssQueue.length === 0) return;
+      const next1 = ssQueue[(ssIndex + 1) % ssQueue.length];
+      const next2 = ssQueue[(ssIndex + 2) % ssQueue.length];
+      const prev1 = ssQueue[(ssIndex - 1 + ssQueue.length) % ssQueue.length];
+
+      preloadSlide(next1);
+      preloadSlide(next2);
+      preloadSlide(prev1);
+    }
+
     function toggleScreensaver() {
       playSFX('powerup');
       const ss = document.getElementById('screensaverOverlay');
@@ -889,10 +906,9 @@
         ss.classList.add('active');
         screensaverPaused = false;
         
-        // Scope screensaver queue to currently filtered gallery view
         ssQueue = getFilteredList();
         if (ssQueue.length === 0) ssQueue = [...allWallpapers];
-        ssQueue.sort(() => Math.random() - 0.5); // Shuffle rotation
+        ssQueue.sort(() => Math.random() - 0.5);
         
         ssIndex = 0;
         renderScreensaverSlide();
@@ -919,21 +935,20 @@
     function renderScreensaverSlide() {
       if (ssQueue.length === 0) return;
       const current = ssQueue[ssIndex];
-      const nextItem = ssQueue[(ssIndex + 1) % ssQueue.length];
-
       const ssImg = document.getElementById('screensaverImg');
-      
-      // Load optimized WebP CDN image instead of raw full GitHub file
-      ssImg.src = current.ssUrl;
+
+      if (ssCache.has(current.ssUrl)) {
+        ssImg.src = ssCache.get(current.ssUrl).src;
+      } else {
+        ssImg.src = current.ssUrl;
+        preloadSlide(current);
+      }
       
       const dims = current.width && current.height ? ` [${current.width}x${current.height}]` : '';
       const pauseState = screensaverPaused ? ' [PAUSED]' : '';
       document.getElementById('screensaverTitle').innerText = `${current.displayName} ${current.vibeTag}${dims} (${ssIndex + 1}/${ssQueue.length})${pauseState}`;
 
-      // Preload next image into off-screen buffer to avoid delay
-      if (nextItem) {
-        ssPreloadImg.src = nextItem.ssUrl;
-      }
+      preloadNearbySlides();
     }
 
     function toggleSSPause() {
